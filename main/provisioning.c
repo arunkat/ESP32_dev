@@ -240,8 +240,8 @@ PROV_DEVICE_RESULT provision_device(char** deviceID, char** iothubURI)
 	//hsm_type = SECURE_DEVICE_TYPE_SYMMETRIC_KEY;
 
 	// Used to initialize IoTHub SDK subsystem
-	//(void)IoTHub_Init();
-	(void)prov_dev_security_init(hsm_type);
+	IoTHub_Init();
+	//(void)prov_dev_security_init(hsm_type);
 
 	// Set the symmetric key if using they auth type
 	//prov_dev_set_symmetric_key_info("<symm_registration_id>", "<symmetric_Key>");
@@ -268,26 +268,19 @@ PROV_DEVICE_RESULT provision_device(char** deviceID, char** iothubURI)
 	prov_transport = Prov_Device_HTTP_Protocol;
 #endif // SAMPLE_HTTP
 
-	printf("Provisioning API Version: %s\r\n", Prov_Device_GetVersionString());
+	printf("Provisioning API Version: %s\r\n", Prov_Device_LL_GetVersionString());
 
-	/*if (g_use_proxy)
-	{
-		http_proxy.host_address = PROXY_ADDRESS;
-		http_proxy.port = PROXY_PORT;
-	}*/
-
+	
 	PROV_DEVICE_RESULT prov_device_result = PROV_DEVICE_RESULT_ERROR;
 	PROV_DEVICE_HANDLE prov_device_handle;
-	if ((prov_device_handle = Prov_Device_Create(global_prov_uri, id_scope, prov_transport)) == NULL)
+	prov_device_handle = Prov_Device_LL_Create(global_prov_uri, id_scope, prov_transport);
+	if ((prov_device_handle = Prov_Device_LL_Create(global_prov_uri, id_scope, prov_transport)) == NULL)
 	{
 		(void)printf("failed calling Prov_Device_Create\r\n");
 	}
 	else
 	{
-		/*if (http_proxy.host_address != NULL)
-		{
-			Prov_Device_SetOption(prov_device_handle, OPTION_HTTP_PROXY, &http_proxy);
-		}*/
+		
 
 		//bool traceOn = true;
 		//Prov_Device_SetOption(prov_device_handle, PROV_OPTION_LOG_TRACE, &traceOn);
@@ -299,10 +292,10 @@ PROV_DEVICE_RESULT provision_device(char** deviceID, char** iothubURI)
 
 		// This option sets the registration ID it overrides the registration ID that is 
 		// set within the HSM so be cautious if setting this value
-		Prov_Device_SetOption(prov_device_handle, PROV_REGISTRATION_ID, "hwLightABC01");
+		Prov_Device_LL_SetOption(prov_device_handle, PROV_REGISTRATION_ID, "hwLightABC01");
 
 		reg_device_context_t deviceContext;
-		prov_device_result = Prov_Device_Register_Device(prov_device_handle, register_device_callback, (void*)&deviceContext, registration_status_callback, NULL);
+		prov_device_result = Prov_Device_LL_Register_Device(prov_device_handle, register_device_callback, (void*)&deviceContext, registration_status_callback, NULL);
 
 		(void)printf("\r\nRegistering Device\r\n\r\n");
 		do
@@ -313,7 +306,7 @@ PROV_DEVICE_RESULT provision_device(char** deviceID, char** iothubURI)
 		*deviceID = deviceContext.deviceID;
 		*iothubURI = deviceContext.iothubURI;
 
-		Prov_Device_Destroy(prov_device_handle);
+		Prov_Device_LL_Destroy(prov_device_handle);
 	}
 	prov_dev_security_deinit();
 /*
@@ -323,5 +316,6 @@ PROV_DEVICE_RESULT provision_device(char** deviceID, char** iothubURI)
 	(void)printf("Press enter key to exit:\r\n");
 	(void)getchar();
 */
-	return prov_device_result;
+	//return prov_device_result;
+	return PROV_DEVICE_RESULT_ERROR;
 }
