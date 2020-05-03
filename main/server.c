@@ -27,6 +27,7 @@
 
 #include "lightABCdevice.h"
 #include "device.h"
+#include "provisioning.h"
 
 // The protocol you wish to use should be uncommented
 //
@@ -54,9 +55,12 @@
 
 /* Paste in the your iothub device connection string  */
 
+extern const char* HSM_CERTIFICATE;
+extern const char* HSM_PRIVATE_KEY;
+
 IOTHUB_DEVICE_CLIENT_LL_HANDLE *handle;
 
-static const char* connectionString = "HostName=eraniothub1.azure-devices.net;DeviceId=hwLightABC01;x509=true";
+//static const char* connectionString = "HostName=eraniothub1.azure-devices.net;DeviceId=hwLightABC01;x509=true";
 /*
 {
   "registrationId": "hwLightABC01",
@@ -67,7 +71,7 @@ static const char* connectionString = "HostName=eraniothub1.azure-devices.net;De
   "deviceId": "hwLightABC01",
   "hubName": "eraniothub1.azure-devices.net"
 }*/
-
+/*
 static const char* x509certificate =
 "-----BEGIN CERTIFICATE-----\n" 
 "MIICwjCCAaqgAwIBAgIEOq0T2TANBgkqhkiG9w0BAQsFADATMREwDwYDVQQDDAhM\n"
@@ -85,7 +89,7 @@ static const char* x509certificate =
 "b6dfAQSsjuFHu8jasbOr6zzA1s3TYluauFWoZsyAJJHISefVKc7N3PqfFru0sc/2\n"
 "nYi5fD9OxPOHbrBLda81Nh339/EblgbwnWnGEZOmQZgSRgLkZloYBcwlTnzbpnAM\n"
 "pLEf5Ju3g2zwjBACrRfaIjz0d8+ZkNcnK9RYbqc8N2+vFYCsDEA=\n"
-"-----END CERTIFICATE-----";
+"-----END CERTIFICATE-----";*/
 /*
 "-----BEGIN CERTIFICATE-----""\n"
 "MIICpDCCAYwCCQCfIjBnPxs5TzANBgkqhkiG9w0BAQsFADAUMRIwEAYDVQQDDAls""\n"
@@ -95,7 +99,7 @@ static const char* x509certificate =
 "tjWUt5TFnAveFoQWIoIbtzlTbOxUFwMrQFzFXOrZoDJmHNWc2u6FmVAkowoOSHiE""\n"
 "dkyVdoGPCXc=""\n"
 "-----END CERTIFICATE-----";
-*/
+*//*
 static const char* x509privatekey =
 "-----BEGIN RSA PRIVATE KEY-----\n"
 "MIIEpAIBAAKCAQEA5i17qXsgAqMLrUc2HB9vJ37BGnrPUmhTZxUPxAhSjWVr4U4O\n"
@@ -123,7 +127,7 @@ static const char* x509privatekey =
 "8ReuICECgYBqZb+9VrA5S58KJ23n7YftLULySLDygkqkbAE6pP4yjaUJB7MM42BP\n"
 "wJGvlImwQH3ibEqapXdt7y73R8zVLvFB2HfrVI4IOpuOdHxsv5EtWk63otQwhSE0\n"
 "Nmw8jRDTqHu044pj+3s5FtjGPS48o4BxJMbaZ3eQ7xVQU3Loa/WfbA==\n"
-"-----END RSA PRIVATE KEY-----";
+"-----END RSA PRIVATE KEY-----";*/
 
 #define DOWORK_LOOP_NUM     3
 
@@ -131,6 +135,7 @@ static const char* x509privatekey =
 //  Converts the light object into a JSON blob with reported properties that is ready to be sent across the wire as a twin.
 
 
+static const char* connectionStringFormat = "HostName=%s;DeviceId=%s;x509=true";
 extern char* serializeToJson(void* props);
 extern bool parseFromJson(const char* json, bool twin_update_state, void* props);
 extern void deviceTwinCallback(DEVICE_TWIN_UPDATE_STATE update_state, const unsigned char* payLoad, size_t size, void* userContextCallback);
@@ -141,7 +146,7 @@ extern int deviceMethodCallback(const char* method_name, const unsigned char* pa
 
 
 
-void iothub_client_device_twin_and_methods_run(void)
+void iothub_client_device_twin_and_methods_run(device_provision_t *provisioningStatus)
 {
     IOTHUB_CLIENT_TRANSPORT_PROVIDER protocol;
     IOTHUB_DEVICE_CLIENT_LL_HANDLE iotHubClientHandle;
@@ -167,45 +172,86 @@ void iothub_client_device_twin_and_methods_run(void)
     protocol = HTTP_Protocol;
 #endif // SAMPLE_HTTP
 
-    if (IoTHub_Init() != 0)
+    char *connectionString = malloc(strlen(connectionStringFormat) + strlen(provisioningStatus->hubName) + strlen(provisioningStatus->deviceId)+1);
+    sprintf(connectionString, connectionStringFormat, provisioningStatus->hubName, provisioningStatus->deviceId);
+	if ((iotHubClientHandle = IoTHubDeviceClient_LL_CreateFromConnectionString(connectionString, protocol)) == NULL)
+	{
+		printf("ERROR: iotHubClientHandle is NULL!\r\n");
+	}
+	else
+	{
+		// Uncomment the following lines to enable verbose logging (e.g., for debugging).
+		//bool traceOn = true;
+		//(void)IoTHubDeviceClient_SetOption(iotHubClientHandle, OPTION_LOG_TRACE, &traceOn);
+		if((IoTHubDeviceClient_LL_SetOption(iotHubClientHandle, OPTION_X509_CERT, HSM_CERTIFICATE) != IOTHUB_CLIENT_OK) ||
+		(IoTHubDeviceClient_LL_SetOption(iotHubClientHandle, OPTION_X509_PRIVATE_KEY, HSM_PRIVATE_KEY) != IOTHUB_CLIENT_OK))
+		{
+			(void)printf("failure to set option \"TrustedCerts\"\r\n");
+		}
+
+		//LightABC_t Light;
+		//memset(&Light, 0, sizeof(LightABC_t));
+
+		char* reportedProperties = serializeToJson(device.properties);
+		(void)IoTHubDeviceClient_LL_SendReportedState(iotHubClientHandle, (const unsigned char*)reportedProperties, strlen(reportedProperties), reportedStateCallback, NULL);
+		(void)IoTHubDeviceClient_LL_SetDeviceMethodCallback(iotHubClientHandle, deviceMethodCallback, &device);
+		(void)IoTHubDeviceClient_LL_SetDeviceTwinCallback(iotHubClientHandle, deviceTwinCallback, &device);
+
+		while (1) {
+			IoTHubDeviceClient_LL_DoWork(iotHubClientHandle);
+			ThreadAPI_Sleep(10);
+		}
+
+		IoTHubDeviceClient_LL_Destroy(iotHubClientHandle);
+		free(reportedProperties);
+		free(device.properties);
+	}
+	
+    free(connectionString);
+}
+
+
+void iothub_device_init()
+{
+	if (IoTHub_Init() != 0)
     {
         printf("Failed to initialize the platform.\r\n");
-    }
-    else
-    {
-        if ((iotHubClientHandle = IoTHubDeviceClient_LL_CreateFromConnectionString(connectionString, protocol)) == NULL)
-        {
-            printf("ERROR: iotHubClientHandle is NULL!\r\n");
-        }
-        else
-        {
-            // Uncomment the following lines to enable verbose logging (e.g., for debugging).
-            //bool traceOn = true;
-            //(void)IoTHubDeviceClient_SetOption(iotHubClientHandle, OPTION_LOG_TRACE, &traceOn);
-            if((IoTHubDeviceClient_LL_SetOption(iotHubClientHandle, OPTION_X509_CERT, x509certificate) != IOTHUB_CLIENT_OK) ||
-            (IoTHubDeviceClient_LL_SetOption(iotHubClientHandle, OPTION_X509_PRIVATE_KEY, x509privatekey) != IOTHUB_CLIENT_OK))
-            {
-                (void)printf("failure to set option \"TrustedCerts\"\r\n");
+    } else {
+        
+        printf("Getting provision status.\n");
+        bool device_ready = false;
+        device_provision_t provisioningStatus;
+        if(provision_get_from_file("", &provisioningStatus)){
+            //this is temporary
+            HSM_CERTIFICATE = provisioningStatus.cert;
+            HSM_PRIVATE_KEY = provisioningStatus.key;
+            if(provisioningStatus.provisioned){
+                printf("Device provisioned.\n");
+                device_ready = true;
+            } else {
+                printf("Device not provisioned.\n");
+                if(provisioningStatus.deviceId)    free(provisioningStatus.deviceId);
+                if(provisioningStatus.hubName)    free(provisioningStatus.hubName);
+                if(provision_device(&provisioningStatus.deviceId, &provisioningStatus.hubName) == PROV_DEVICE_RESULT_OK){
+                    provisioningStatus.provisioned = true;
+                    provision_save_to_file("", &provisioningStatus);
+                    printf("Device provisioned successfully.");
+                    device_ready = true;
+
+                } else {
+                    printf("Device failed to provision.");
+                }
+
             }
-
-            //LightABC_t Light;
-            //memset(&Light, 0, sizeof(LightABC_t));
-
-            char* reportedProperties = serializeToJson(device.properties);
-            (void)IoTHubDeviceClient_LL_SendReportedState(iotHubClientHandle, (const unsigned char*)reportedProperties, strlen(reportedProperties), reportedStateCallback, NULL);
-            (void)IoTHubDeviceClient_LL_SetDeviceMethodCallback(iotHubClientHandle, deviceMethodCallback, &device);
-            (void)IoTHubDeviceClient_LL_SetDeviceTwinCallback(iotHubClientHandle, deviceTwinCallback, &device);
-
-            while (1) {
-				IoTHubDeviceClient_LL_DoWork(iotHubClientHandle);
-				ThreadAPI_Sleep(10);
-			}
-
-            IoTHubDeviceClient_LL_Destroy(iotHubClientHandle);
-            free(reportedProperties);
-            free(device.properties);
+        } else {
+            printf("Failed to get provision status.\n");
         }
 
-        IoTHub_Deinit();
+        if(device_ready){
+            iothub_client_device_twin_and_methods_run(&provisioningStatus);
+        }
     }
+
+    
+    IoTHub_Deinit();
 }

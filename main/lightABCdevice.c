@@ -4,6 +4,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 
+#include "driver/gpio.h"
+
 
 
 #include "parson.h"

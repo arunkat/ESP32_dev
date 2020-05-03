@@ -74,14 +74,14 @@ static void initialise_wifi(wifi_config_t *wifi_config)
 	ESP_ERROR_CHECK( esp_wifi_start() );
 }
 
-extern void iothub_client_device_twin_and_methods_run(void);
+extern void iothub_device_init(void);
 void azure_task(void *pvParameter)
 {
 	xEventGroupWaitBits(wifi_event_group, CONNECTED_BIT,
 						false, true, portMAX_DELAY);
 	ESP_LOGI(TAG, "Connected to AP success!");
 
-	iothub_client_device_twin_and_methods_run();
+	iothub_device_init();
 	vTaskDelete(NULL);
 }
 
