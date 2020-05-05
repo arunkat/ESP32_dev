@@ -16,9 +16,11 @@
 #include "esp_wifi.h"
 #include "esp_event_loop.h"
 #include "esp_log.h"
+#include "esp_task_wdt.h"
 
 #include "nvs_flash.h"
 #include "server.h"
+#include "wifi.h"
 
 //temporary
 #define EXAMPLE_WIFI_SSID "wifiSSID"
@@ -98,13 +100,13 @@ void app_main()
 	//TODO set up via Wifi provisioning
 	wifi_config_t wifi_config = {
 		.sta = {
-			.ssid = EXAMPLE_WIFI_SSID,
-			.password = EXAMPLE_WIFI_PASS,
+			.ssid = WIFI_SSID,
+			.password = WIFI_PASSWORD,
 		},
 	};
 	initialise_wifi(&wifi_config);
 
-
+	esp_task_wdt_init(10,false);
 	if ( xTaskCreate(&azure_task, "azure_task", 1024 * 6, NULL, 5, NULL) != pdPASS ) {
 		printf("create azure task failed\r\n");
 	}
